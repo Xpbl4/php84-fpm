@@ -1,0 +1,49 @@
+name: Docker image
+
+# Pull requests build the image; master publishes it to Docker Hub as :latest, :alpine and :alpine-<sha>.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE: xpbl4/php84-fpm
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the Dockerfile
+        run: docker run --rm -v "$PWD:/src" -w /src hadolint/hadolint:latest-debian hadolint Dockerfile
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest
+            type=raw,value=alpine
+            type=sha,prefix=alpine-
+      # DOCKERHUB_USERNAME is a repository variable, the image namespace is the fallback.
+      # Docker Hub IDs are lowercase, and stray whitespace in a pasted token breaks the auth header.
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'xpbl4' }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          username=$(printf '%s' "$DOCKERHUB_USERNAME" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+          printf '%s' "$DOCKERHUB_TOKEN" | tr -d '[:space:]' | docker login --username "$username" --password-stdin
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=alpine
+          cache-to: type=gha,mode=max,scope=alpine

@@ -1,0 +1,4 @@
+# apt and apk packages follow their distribution repositories, so versions are not pinned.
+ignored:
+  - DL3008
+  - DL3018

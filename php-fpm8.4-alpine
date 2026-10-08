@@ -1,0 +1,3 @@
+#!/bin/sh
+# FPM reads the fpm conf.d of the Ubuntu layout; the CLI default comes from PHP_INI_SCAN_DIR.
+PHP_INI_SCAN_DIR=:/etc/php/8.4/fpm/conf.d exec /usr/local/sbin/php-fpm "$@"
