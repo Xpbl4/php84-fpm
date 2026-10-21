@@ -10,17 +10,19 @@ COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /u
 # and www-data with uid/gid 33, which owns the projects' state files.
 # PHP2Shell (CVE-2026-109618, CVE-2026-109619): the build fails on a base image older than PHP 8.4.27,
 # and session upload progress, one of the attack paths, is off: no project uses it.
+# apcu, imagick and memcache are built from their GitHub release tags: pecl.php.net's downloads
+# and REST API fail under load. memcache's package.xml lists a file its GitHub archive leaves out,
+# so it is built with docker-php-ext-install instead of the installer.
 RUN php -r 'exit(version_compare(PHP_VERSION, "8.4.27", "<") ? 1 : 0);' \
     && install-php-extensions \
-        apcu \
+        krakjoe/apcu@v5.1.28 \
         calendar \
         exif \
         ffi \
         gd \
         gettext \
-        imagick \
+        Imagick/imagick@3.8.1 \
         intl \
-        memcache \
         mysqli \
         opcache \
         pcntl \
@@ -32,6 +34,15 @@ RUN php -r 'exit(version_compare(PHP_VERSION, "8.4.27", "<") ? 1 : 0);' \
         sysvshm \
         xsl \
         zip \
+    && apk add --no-cache --virtual .memcache-build zlib-dev \
+    && docker-php-source extract \
+    && mkdir /usr/src/php/ext/memcache \
+    && curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o /tmp/memcache.tar.gz https://codeload.github.com/websupport-sk/pecl-memcache/tar.gz/refs/tags/8.2 \
+    && tar -xzf /tmp/memcache.tar.gz --strip-components=1 -C /usr/src/php/ext/memcache \
+    && rm /tmp/memcache.tar.gz \
+    && docker-php-ext-install memcache \
+    && docker-php-source delete \
+    && apk del --no-network .memcache-build \
     && rm /usr/local/bin/install-php-extensions \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && apk add --no-cache bash cronie imagemagick sed tzdata \
