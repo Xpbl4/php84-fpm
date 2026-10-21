@@ -8,7 +8,10 @@ COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /u
 # imagemagick brings the convert/magick tools next to the imagick module.
 # Then the Ubuntu paths that projects rely on: binaries, conf.d mounts, the FPM pool directory
 # and www-data with uid/gid 33, which owns the projects' state files.
-RUN install-php-extensions \
+# PHP2Shell (CVE-2026-109618, CVE-2026-109619): the build fails on a base image older than PHP 8.4.27,
+# and session upload progress, one of the attack paths, is off: no project uses it.
+RUN php -r 'exit(version_compare(PHP_VERSION, "8.4.27", "<") ? 1 : 0);' \
+    && install-php-extensions \
         apcu \
         calendar \
         exif \
@@ -43,7 +46,8 @@ RUN install-php-extensions \
     && group=$(awk -F: '$3 == 33 {print $1}' /etc/group) && { [ -z "$group" ] || delgroup "$group"; } \
     && addgroup -g 33 -S www-data \
     && adduser -u 33 -S -D -H -h /var/www -s /sbin/nologin -G www-data www-data \
-    && chown -R www-data:www-data /var/www
+    && chown -R www-data:www-data /var/www \
+    && printf 'session.upload_progress.enabled = 0\n' > "$PHP_INI_DIR/conf.d/zz-php2shell.ini"
 
 ENV PHP_INI_SCAN_DIR=:/etc/php/8.4/cli/conf.d
 
